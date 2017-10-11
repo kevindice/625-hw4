@@ -9,20 +9,9 @@
 #define MAX_KEYWORD_LENGTH 10
 #define MAX_LINE_LENGTH 2001
 
-#ifdef VIPER
-#define WIKI_FILE "/home/k/kmdice/625/hw3/test10-%s.txt"
-#define KEYWORD_FILE "/home/k/kmdice/625/hw3/keywords.txt"
-#define OUTPUT_FILE "/home/k/kmdice/625/hw3/output/wiki-%s-part-%03d.out"
-#elif PERSONAL
-#define WIKI_FILE "/home/kevin/625/hw3/test10-%s.txt"
-#define KEYWORD_FILE "/home/kevin/625/hw3/keywords.txt"
-#define OUTPUT_FILE "/home/kevin/625/hw3/output/wiki-%s-part-%03d.out"
-#else
-#define WIKI_FILE "/homes/kmdice/625/hw3/test10-%s.txt"
-#define KEYWORD_FILE "/homes/kmdice/625/hw3/keywords.txt"
-#define OUTPUT_FILE "/homes/kmdice/625/hw3/output/wiki-%s-part-%03d.out"
-#endif
-
+#define WIKI_FILE "/test10-%s.txt"
+#define KEYWORD_FILE "/keywords.txt"
+#define OUTPUT_FILE "/output/wiki-%s-part-%03d.out"
 
 double myclock();
 
@@ -98,7 +87,7 @@ int main(int argc, char * argv[])
 
   if(rank == 0)
   {
-    fd = fopen( KEYWORD_FILE, "r" );
+    fd = fopen( WORKING_DIRECTORY KEYWORD_FILE, "r" );
     nwords = -1;
     do {
       err = fscanf( fd, "%[^\n]\n", word[++nwords] );
@@ -132,7 +121,7 @@ int main(int argc, char * argv[])
   if(rank == 0)
   {
     char *input_file = (char*)malloc(500 * sizeof(char));
-    sprintf(input_file, WIKI_FILE, argv[2]);
+    sprintf(input_file, WORKING_DIRECTORY WIKI_FILE, argv[2]);
     fd = fopen( input_file, "r" );
     nlines = -1;
     do {
@@ -183,7 +172,7 @@ int main(int argc, char * argv[])
   // Dump out the word counts
 
   char *output_file = (char*) malloc(500 * sizeof(char));
-  sprintf(output_file, OUTPUT_FILE, argv[1], rank);
+  sprintf(output_file, WORKING_DIRECTORY OUTPUT_FILE, argv[1], rank);
 
   fd = fopen( output_file, "w" );
     for( i = start; i < end; i++ ) {
