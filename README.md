@@ -26,8 +26,8 @@ If on your local machine (assuming you already have test10-6.txt: `sh local-gene
 
 ## Resources
 
-MPI - [https://computing.llnl.gov/tutorials/mpi/](https://computing.llnl.gov/tutorials/mpi/)
-Beocat Docs - [https://support.beocat.ksu.edu/BeocatDocs/index.php/Main_Page](https://support.beocat.ksu.edu/BeocatDocs/index.php/Main_Page)
-Compute Node Specs - [https://support.beocat.ksu.edu/BeocatDocs/index.php/Compute_Nodes](https://support.beocat.ksu.edu/BeocatDocs/index.php/Compute_Nodes)
+ - MPI - [https://computing.llnl.gov/tutorials/mpi/](https://computing.llnl.gov/tutorials/mpi/)
+ - Beocat Docs - [https://support.beocat.ksu.edu/BeocatDocs/index.php/Main_Page](https://support.beocat.ksu.edu/BeocatDocs/index.php/Main_Page)
+ - Compute Node Specs - [https://support.beocat.ksu.edu/BeocatDocs/index.php/Compute_Nodes](https://support.beocat.ksu.edu/BeocatDocs/index.php/Compute_Nodes)
 
 
