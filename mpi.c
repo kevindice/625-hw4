@@ -88,6 +88,11 @@ int main(int argc, char * argv[])
   if(rank == 0)
   {
     fd = fopen( WORKING_DIRECTORY KEYWORD_FILE, "r" );
+    if(!fd) {
+        printf("\n------------------------------------\n"
+	       "\nERROR: Can't open keyword file.  Not found.\n"
+	       "\n------------------------------------\n");
+    }
     nwords = -1;
     do {
       err = fscanf( fd, "%[^\n]\n", word[++nwords] );
@@ -123,6 +128,9 @@ int main(int argc, char * argv[])
     char *input_file = (char*)malloc(500 * sizeof(char));
     sprintf(input_file, WORKING_DIRECTORY WIKI_FILE, argv[2]);
     fd = fopen( input_file, "r" );
+    printf("\n------------------------------------\n"
+           "\nERROR: Can't open wiki file.  Not found.\n"
+           "\n------------------------------------\n");
     nlines = -1;
     do {
       err = fscanf( fd, "%[^\n]\n", line[++nlines] );

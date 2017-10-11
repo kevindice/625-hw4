@@ -3,3 +3,5 @@ mpi
 ring
 star
 queue
+output/*
+keywords.txt
