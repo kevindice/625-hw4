@@ -1,7 +1,4 @@
-all: serial mpi ring star queue
-
-serial: serial.c
-	cc serial.c -o serial
+all: mpi ring star queue
 
 mpi: mpi.c
 	mpicc mpi.c -o mpi
