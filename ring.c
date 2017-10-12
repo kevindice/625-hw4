@@ -45,7 +45,7 @@ int main(int argc, char * argv[])
   printf("Number of tasks= %d, My rank= %d, Running on %s\n", numtasks, rank, hostname);
 
   if(argc != 6){
-     printf("Usage: %s <job id> <input size> <parallel environment> <nslots> <nhosts>", argv[0]);
+     printf("Usage: %s <job id> <input size> <parallel environment> <nslots> <nhosts>\n", argv[0]);
      return -1;
   }
 
@@ -82,8 +82,7 @@ int main(int argc, char * argv[])
     line[i] = linemem + i * MAX_LINE_LENGTH;
   }
 
-
-  // Read in the dictionary words and sort them
+  // Read in the keywords and sort them
 
   if(rank == 0)
   {
@@ -142,12 +141,6 @@ int main(int argc, char * argv[])
     printf( "Read in %d lines averaging %.0lf chars/line\n", nlines, nchars / nlines);
   }
 
-  // Broadcast data
-    MPI_Bcast(&nwords, 1, MPI_INT, 0, MPI_COMM_WORLD);
-    MPI_Bcast(&nlines, 1, MPI_INT, 0, MPI_COMM_WORLD);
-    MPI_Bcast(wordmem, nwords * MAX_KEYWORD_LENGTH, MPI_CHAR, 0, MPI_COMM_WORLD);
-    MPI_Bcast(linemem, nlines * MAX_LINE_LENGTH, MPI_CHAR, 0, MPI_COMM_WORLD);
-
   if(rank == 0)
   {
     printf("Read in and MPI comm overhead for %d lines and %d procs = %lf seconds\n", nlines, numtasks, myclock() - tlast);
@@ -156,55 +149,108 @@ int main(int argc, char * argv[])
   }
   tlast = myclock();
 
-  // Division of work
-    start = rank * (nwords/numtasks);
-    end = (rank + 1) * (nwords/numtasks);
-    if(rank == numtasks - 1) end = nwords;
 
-    printf("------- Proc: %d, Start: %d, End: %d, Nwords: %d, Num tasks: %d --------\n", rank, start, end, nwords, numtasks);
+  int next, previous;
+  // Calculate the previous and next ranks (wrap around using modulus)
+  next = (rank + 1) % numtasks;
+  previous = (rank + numtasks - 1) % numtasks;
 
+  // Calculate the set of the wiki dump for the current process to work on
+  start = rank * (nwords/numtasks);
+  end = (rank + 1) * (nwords/numtasks);
+  if(rank == numtasks - 1) end = nwords;
 
-  // Loop over the word list
-  for( k = 0; k < nlines; k++ ) {
-    for( i = start; i < end; i++ ) {
-      if( strstr( line[k], word[i] ) != NULL ) {
-        count[i]++;
-        hittail[i] = add(hittail[i], k);
+  // Malloc the variable for the current keyword
+  char *keyword = (char*) malloc(MAX_KEYWORD_LENGTH * sizeof(char));
+
+  int keywordIterator, keywordCount;
+  // If the current rank is 0, set the first keyword.
+  if (rank == 0) {
+    keywordIterator = 0;
+    keyword = word[keywordIterator];
+  } else {
+    keyword = '\0';
+  }
+
+  // Malloc a variable for the last keyword so other ranks know where to stop
+  char *lastKeyword = (char*) malloc(MAX_KEYWORD_LENGTH * sizeof(char));
+
+  // Get the last keyword
+  if (rank == 0) {
+    lastKeyword = word[maxwords];
+  }
+
+  // Broadcast it
+  MPI_Bcast(lastKeyword, MAX_KEYWORD_LENGTH, MPI_CHAR, 0, MPI_COMM_WORLD);
+
+  MPI_Status status;
+
+  // Create a loop for doing the work
+  while (1) {
+    // Check if we (don't) have a keyword
+    if (keyword == '\0') {
+      // If we don't and this is rank 0, get the next keyword
+      if (rank == 0) {
+        keywordIterator++;
+        keyword = word[keywordIterator];
+      } else {
+        // Not rank 0, so listen for keyword and set it
+        // Use tag 1
+        MPI_Recv(keyword, MAX_KEYWORD_LENGTH, MPI_CHAR, previous, 1, MPI_COMM_WORLD, &status);
+
+        // TODO: Listen for line numbers and set them
+        // Use tag 2
+        // MPI_Recv()
       }
     }
+
+    // Set the count for the current keyword in the current set to 0
+    keywordCount = 0;
+
+    // Search through the set for the current rank, searching for the keyword
+    for( i = start; i < end; i++ ) {
+      if( strstr( line[i], keyword ) != NULL ) {
+        // Increase counter
+        keywordCount++;
+
+        // TODO: Store the line number
+
+      }
+    }
+
+    // Send the keyword to the next process
+    // Use tag 1
+    MPI_Send(keyword, MAX_KEYWORD_LENGTH, MPI_CHAR, next, 1, MPI_COMM_WORLD);
+
+    // TODO: Send the lines found to the next process
+    // Use tag 2
+    // MPI_Send();
+
+    // TODO: Listen for keyword to come back, then print it and all lines it was on
+    if (rank == 0) {
+      // Print the stuff
+
+      // If the message was the last keyword, break the loop
+
+    } else {
+      // If this was the last keyword
+      if (keyword == lastKeyword) {
+        // break the Loop
+        break;
+      }
+    }
+      // Clear the keyword for next Loop
+      keyword = '\0';
   }
+
+  // TODO: Make sure there are no more keywords to listen for here
+
+  printf("------- Proc: %d, Start: %d, End: %d, Nwords: %d, Num tasks: %d --------\n", rank, start, end, nwords, numtasks);
 
   printf("\n\nPART_DONE\trank %d\tafter %lf seconds\twith %s slots\ton %s hosts\twith pe %s\n",
       rank, myclock() - tlast, argv[4], argv[5], argv[3]); fflush(stdout);
 
-  // Dump out the word counts
-
-  char *output_file = (char*) malloc(500 * sizeof(char));
-  sprintf(output_file, WORKING_DIRECTORY OUTPUT_FILE, argv[1], rank);
-
-  fd = fopen( output_file, "w" );
-    for( i = start; i < end; i++ ) {
-      if(count[i] != 0){
-        fprintf( fd, "%s: ", word[i] );
-        int *line_numbers;
-        int len;
-        // this function mallocs for line_numbers
-        toArray(hithead[i], &line_numbers, &len);
-
-            for (k = 0; k < len - 1; k++) {
-              fprintf( fd, "%d, ", line_numbers[k]);
-            }
-            fprintf( fd, "%d\n", line_numbers[len - 1]);
-
-        // so we free it
-        free(line_numbers);  line_numbers = NULL;
-      }
-    }
-  fclose( fd );
-
-  free(output_file);  output_file = NULL;
-
-  // Take end time when all are finished writing the file
+  // Take end time when all are finished
 
   printf("================\n"
     "Rank %d --- Unrolled linked list stats:\n\n"
