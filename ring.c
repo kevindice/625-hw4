@@ -31,8 +31,7 @@ int main(int argc, char * argv[])
   double tstart, ttotal, tlast;
   FILE *fd;
   char *wordmem, **word, *linemem, **line, *tempwordmem;
-  struct Node** hithead;
-  struct Node** hittail;
+
 
   // MPI related
   int numtasks, rank, len, rc;
@@ -54,25 +53,13 @@ int main(int argc, char * argv[])
   tstart = myclock();  // Start the clock
   tlast = tstart;
 
-  // Malloc space for the word list and lines
-
-  count = (int *) calloc( maxwords, sizeof( int ) );
-
-  // Allocate node pools
-  allocateNodePools();
-
-  // Contiguous memory for words
-  wordmem = malloc(maxwords * MAX_KEYWORD_LENGTH * sizeof(char));
-  word = (char **) malloc( maxwords * sizeof( char * ) );
-  for(i = 0; i < maxwords; i++){
-    word[i] = wordmem + i * MAX_KEYWORD_LENGTH;
-  }
-
-  // Allocate arrays for the heads and tails of the lists
-  hithead = (struct Node**) malloc( maxwords * sizeof(struct Node *) );
-  hittail = (struct Node**) malloc( maxwords * sizeof(struct Node *) );
-  for( i = 0; i < maxwords; i++ ) {
-    hithead[i] = hittail[i] = node_alloc();
+  // Contiguous memory for words (only need this on rank 0)
+  if (rank == 0) {
+    wordmem = malloc(maxwords * MAX_KEYWORD_LENGTH * sizeof(char));
+    word = (char **) malloc( maxwords * sizeof( char * ) );
+    for(i = 0; i < maxwords; i++){
+      word[i] = wordmem + i * MAX_KEYWORD_LENGTH;
+    }
   }
 
   // Contiguous memory...yay
@@ -119,6 +106,7 @@ int main(int argc, char * argv[])
     free(tempwordmem); tempwordmem = NULL;
   }
 
+  MPI_Bcast(&nwords, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
   // Read in the lines from the data file
 
@@ -147,8 +135,8 @@ int main(int argc, char * argv[])
     printf("OHEAD\t%d\t%d\t%lf\t%s\t%s", nlines, numtasks, myclock() -tlast, argv[3], argv[5]);
     printf("\n******  Starting work  ******\n\n");
   }
-  tlast = myclock();
 
+  tlast = myclock();
 
   int next, previous;
   // Calculate the previous and next ranks (wrap around using modulus)
@@ -161,89 +149,137 @@ int main(int argc, char * argv[])
   if(rank == numtasks - 1) end = nwords;
 
   // Malloc the variable for the current keyword
-  char *keyword = (char*) malloc(MAX_KEYWORD_LENGTH * sizeof(char));
+  char *keyword = (char*) malloc((MAX_KEYWORD_LENGTH + 1) * sizeof(char));
+  keyword[0] = '\0';
 
-  int keywordIterator, keywordCount;
-  // If the current rank is 0, set the first keyword.
-  if (rank == 0) {
-    keywordIterator = 0;
-    keyword = word[keywordIterator];
-  } else {
-    keyword = '\0';
-  }
-
-  // Malloc a variable for the last keyword so other ranks know where to stop
-  char *lastKeyword = (char*) malloc(MAX_KEYWORD_LENGTH * sizeof(char));
-
-  // Get the last keyword
-  if (rank == 0) {
-    lastKeyword = word[maxwords];
-  }
-
-  // Broadcast it
-  MPI_Bcast(lastKeyword, MAX_KEYWORD_LENGTH, MPI_CHAR, 0, MPI_COMM_WORLD);
-
+  int keywordCount;
+  int keywordIterator = 0;
   MPI_Status status;
+  int lineNumbers[100];
+  int flag = 0;
+  int receivedKeywords = 0;
 
+  printf("[Rank %i] Entering main loop.\n", rank);
   // Create a loop for doing the work
   while (1) {
+    printf("[Rank %i] next: %i, previous: %i.\n", rank, next, previous);
     // Check if we (don't) have a keyword
-    if (keyword == '\0') {
-      // If we don't and this is rank 0, get the next keyword
+    if (keyword[0] == '\0') {
+      // If we don't and this is rank 0, get the keyword and reset the keywordCount
       if (rank == 0) {
-        keywordIterator++;
         keyword = word[keywordIterator];
+        keywordCount = 0;
       } else {
-        // Not rank 0, so listen for keyword and set it
+        printf("[Rank %i] Listening for data from rank %i\n", rank, previous);
+        // Not rank 0, so listen for keyword
         // Use tag 1
-        MPI_Recv(keyword, MAX_KEYWORD_LENGTH, MPI_CHAR, previous, 1, MPI_COMM_WORLD, &status);
+        MPI_Recv(&keyword, MAX_KEYWORD_LENGTH, MPI_BYTE, previous, 1, MPI_COMM_WORLD, &status);
 
-        // TODO: Listen for line numbers and set them
+        printf("[Rank %i] Got keyword '%s'.\n", rank, keyword);
+
+        // Listen for the count
         // Use tag 2
-        // MPI_Recv()
+        MPI_Recv(&keywordCount, 1, MPI_INT, previous, 2, MPI_COMM_WORLD, &status);
+
+        // Listen for line number array
+        // Use tag 3
+        MPI_Recv(&lineNumbers, 100, MPI_INT, previous, 3, MPI_COMM_WORLD, &status);
+        //printf("[Rank %i] Got keyword %s from rank %i with %i found so far.\n", rank, keyword, test_previous, keywordCount);
       }
     }
 
-    // Set the count for the current keyword in the current set to 0
-    keywordCount = 0;
-
+      printf("[Rank %i] Searching for keyword '%s' between lines %i and %i\n", rank, keyword, start, end);
     // Search through the set for the current rank, searching for the keyword
     for( i = start; i < end; i++ ) {
       if( strstr( line[i], keyword ) != NULL ) {
+        // Store the line number
+        lineNumbers[keywordCount] = i;
         // Increase counter
         keywordCount++;
-
-        // TODO: Store the line number
-
       }
     }
+    printf("[Rank %i] Found keyword '%s' %i times.\n", rank, keyword, keywordCount);
 
+    printf("[Rank %i] Sending data to rank %i\n", rank, next);
     // Send the keyword to the next process
     // Use tag 1
-    MPI_Send(keyword, MAX_KEYWORD_LENGTH, MPI_CHAR, next, 1, MPI_COMM_WORLD);
+    printf("[Rank %i] Sending keyword '%s' to rank %i\n", rank, keyword, next);
+    MPI_Ssend(&keyword, strlen(keyword) + 1, MPI_BYTE, next, 1, MPI_COMM_WORLD);
 
-    // TODO: Send the lines found to the next process
+    // Send the count to the next process
     // Use tag 2
-    // MPI_Send();
+    MPI_Ssend(&keywordCount, 1, MPI_INT, next, 2, MPI_COMM_WORLD);
 
-    // TODO: Listen for keyword to come back, then print it and all lines it was on
+    // Send the lines found to the next process
+    // Use tag 3
+    MPI_Ssend(&lineNumbers, 100, MPI_INT, next, 3, MPI_COMM_WORLD);
+
+    // Listen for keyword to come back, then print it and all lines it was on
     if (rank == 0) {
-      // Print the stuff
+      printf("[Rank %i] Listening to rank %i to print\n", rank, previous);
+      // Check if a message is available
+      MPI_Iprobe(previous, 1, MPI_COMM_WORLD, &flag, &status);
+      if (flag) {
+        printf("[Rank %i] Found data to receive from rank %i\n", rank, previous);
+        MPI_Recv(&keyword, MAX_KEYWORD_LENGTH, MPI_BYTE, previous, 1, MPI_COMM_WORLD, &status);
+        MPI_Recv(&keywordCount, 1, MPI_INT, previous, 2, MPI_COMM_WORLD, &status);
+        MPI_Recv(&lineNumbers, 100, MPI_INT, previous, 3, MPI_COMM_WORLD, &status);
+        receivedKeywords++;
 
-      // If the message was the last keyword, break the loop
-
-    } else {
-      // If this was the last keyword
-      if (keyword == lastKeyword) {
-        // break the Loop
-        break;
+        // Print the stuff
+        if (keywordCount) {
+          printf("%s: ", keyword);
+          i = 0;
+          while (keywordCount) {
+            printf("%i, ", lineNumbers[i]);
+            keywordCount--;
+            i++;
+          }
+          // Get rid of the last comma & space
+          printf("\b\b \n");
+        }
       }
     }
-      // Clear the keyword for next Loop
-      keyword = '\0';
-  }
 
-  // TODO: Make sure there are no more keywords to listen for here
+    // If this was the last keyword
+    if (keywordIterator == nwords - 1) {
+      // break the Loop
+      break;
+    }
+
+    keywordIterator++;
+    // Clear the keyword for next Loop
+    keyword[0] = '\0';
+  }
+  printf("[Rank %i] Leaving main loop.\n", rank);
+
+  // Listen for the rest of the keywords
+  if (rank == 0) {
+    while (1) {
+      // If the message was the last keyword, break the loop
+      if (receivedKeywords == keywordIterator + 1) {
+        break;
+      }
+      // Wait for any messages
+      while (!flag) {
+        MPI_Iprobe(previous, 1, MPI_COMM_WORLD, &flag, &status);
+      }
+      MPI_Recv(&keyword, MAX_KEYWORD_LENGTH, MPI_BYTE, previous, 1, MPI_COMM_WORLD, &status);
+      MPI_Recv(&keywordCount, 1, MPI_INT, previous, 2, MPI_COMM_WORLD, &status);
+      MPI_Recv(&lineNumbers, 100, MPI_INT, previous, 3, MPI_COMM_WORLD, &status);
+      receivedKeywords++;
+      // Print the stuff
+      if (keywordCount) {
+        printf("%s: ", keyword);
+        while (keywordCount) {
+          printf("%s, ", keyword);
+          keywordCount--;
+        }
+        // Get rid of the last comma & space
+        printf("\b\b \n");
+      }
+    }
+  }
 
   printf("------- Proc: %d, Start: %d, End: %d, Nwords: %d, Num tasks: %d --------\n", rank, start, end, nwords, numtasks);
 
@@ -251,21 +287,6 @@ int main(int argc, char * argv[])
       rank, myclock() - tlast, argv[4], argv[5], argv[3]); fflush(stdout);
 
   // Take end time when all are finished
-
-  printf("================\n"
-    "Rank %d --- Unrolled linked list stats:\n\n"
-    "Node Pools: %d\n"
-    "Current Node Count: %d\n"
-    "Total Nodes Allocated: %d\n"
-    "Nodes in Use: %d\n"
-    "==================\n",
-    rank,
-    _num_node_pools,
-    _current_node_count,
-    _num_node_pools * MEMORY_POOL_SIZE,
-    nodes_in_use
-  ); fflush(stdout);
-
   MPI_Barrier(MPI_COMM_WORLD);
 
   if(rank == 0)
@@ -276,15 +297,11 @@ int main(int argc, char * argv[])
 
   // Clean up after ourselves
 
-
-  // Linked list counts
-  destroyNodePools();
-  free(hithead);  hithead = NULL;
-  free(hittail);  hittail = NULL;
-
   // Words
   free(word);     word = NULL;
-  free(wordmem);  wordmem = NULL;
+  if (rank == 0) {
+    free(wordmem);  wordmem = NULL;
+  }
 
   // Lines
   free(line);     line = NULL;
