@@ -4,7 +4,6 @@
 #include <time.h>
 #include <unistd.h>
 #include <mpi.h>
-#include "unrolled_int_linked_list.c"
 
 #define MAX_KEYWORD_LENGTH 10
 #define MAX_LINE_LENGTH 2001
@@ -115,9 +114,9 @@ int main(int argc, char * argv[])
     char *input_file = (char*)malloc(500 * sizeof(char));
     sprintf(input_file, WORKING_DIRECTORY WIKI_FILE, argv[2]);
     fd = fopen( input_file, "r" );
-    printf("\n------------------------------------\n"
-           "\nERROR: Can't open wiki file.  Not found.\n"
-           "\n------------------------------------\n");
+    // printf("\n------------------------------------\n"
+    //        "\nERROR: Can't open wiki file.  Not found.\n"
+    //        "\n------------------------------------\n");
     nlines = -1;
     do {
       err = fscanf( fd, "%[^\n]\n", line[++nlines] );
@@ -152,7 +151,7 @@ int main(int argc, char * argv[])
   char *keyword = (char*) malloc((MAX_KEYWORD_LENGTH + 1) * sizeof(char));
   keyword[0] = '\0';
 
-  int keywordCount;
+  int keywordCount = 0;
   int keywordIterator = 0;
   MPI_Status status;
   int lineNumbers[100];
@@ -165,16 +164,19 @@ int main(int argc, char * argv[])
     printf("[Rank %i] next: %i, previous: %i.\n", rank, next, previous);
     // Check if we (don't) have a keyword
     if (keyword[0] == '\0') {
-      // If we don't and this is rank 0, get the keyword and reset the keywordCount
+      // If we don't and this is rank 0, get the keyword
       if (rank == 0) {
-        keyword = word[keywordIterator];
-        keywordCount = 0;
+        strcpy(keyword, word[keywordIterator]);
       } else {
         printf("[Rank %i] Listening for data from rank %i\n", rank, previous);
+        printf("[Rank %i] Before MPI_Recv: next: %i, previous: %i.\n", rank, next, previous);
         // Not rank 0, so listen for keyword
         // Use tag 1
         MPI_Recv(&keyword, MAX_KEYWORD_LENGTH, MPI_BYTE, previous, 1, MPI_COMM_WORLD, &status);
 
+        printf("[Rank %i] Got past first MPI_Recv.\n", rank);
+        printf("[Rank %i] After MPI_Recv: next: %i, previous: %i.\n", rank, next, previous);
+        printf("[Rank %i] MPI Error: %i\n", rank, status.MPI_ERROR);
         printf("[Rank %i] Got keyword '%s'.\n", rank, keyword);
 
         // Listen for the count
@@ -205,6 +207,7 @@ int main(int argc, char * argv[])
     // Use tag 1
     printf("[Rank %i] Sending keyword '%s' to rank %i\n", rank, keyword, next);
     MPI_Ssend(&keyword, strlen(keyword) + 1, MPI_BYTE, next, 1, MPI_COMM_WORLD);
+    printf("[Rank %i] Got past first MPI_Send\n", rank);
 
     // Send the count to the next process
     // Use tag 2
