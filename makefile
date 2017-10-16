@@ -17,3 +17,6 @@ star: star.c
 
 queue: queue.c
 	mpicc queue.c -o queue $(FLAGS)
+
+clean:
+	rm mpi ring star queue
