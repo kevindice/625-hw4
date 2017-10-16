@@ -172,7 +172,7 @@ int main(int argc, char * argv[])
         printf("[Rank %i] Before MPI_Recv: next: %i, previous: %i.\n", rank, next, previous);
         // Not rank 0, so listen for keyword
         // Use tag 1
-        MPI_Recv(&keyword, MAX_KEYWORD_LENGTH, MPI_BYTE, previous, 1, MPI_COMM_WORLD, &status);
+        MPI_Recv(keyword, MAX_KEYWORD_LENGTH, MPI_CHAR, previous, 1, MPI_COMM_WORLD, &status);
 
         printf("[Rank %i] Got past first MPI_Recv.\n", rank);
         printf("[Rank %i] After MPI_Recv: next: %i, previous: %i.\n", rank, next, previous);
@@ -206,16 +206,16 @@ int main(int argc, char * argv[])
     // Send the keyword to the next process
     // Use tag 1
     printf("[Rank %i] Sending keyword '%s' to rank %i\n", rank, keyword, next);
-    MPI_Ssend(&keyword, strlen(keyword) + 1, MPI_BYTE, next, 1, MPI_COMM_WORLD);
+    MPI_Send(keyword, strlen(keyword) + 1, MPI_CHAR, next, 1, MPI_COMM_WORLD);
     printf("[Rank %i] Got past first MPI_Send\n", rank);
 
     // Send the count to the next process
     // Use tag 2
-    MPI_Ssend(&keywordCount, 1, MPI_INT, next, 2, MPI_COMM_WORLD);
+    MPI_Send(&keywordCount, 1, MPI_INT, next, 2, MPI_COMM_WORLD);
 
     // Send the lines found to the next process
     // Use tag 3
-    MPI_Ssend(&lineNumbers, 100, MPI_INT, next, 3, MPI_COMM_WORLD);
+    MPI_Send(&lineNumbers, 100, MPI_INT, next, 3, MPI_COMM_WORLD);
 
     // Listen for keyword to come back, then print it and all lines it was on
     if (rank == 0) {
@@ -224,14 +224,14 @@ int main(int argc, char * argv[])
       MPI_Iprobe(previous, 1, MPI_COMM_WORLD, &flag, &status);
       if (flag) {
         printf("[Rank %i] Found data to receive from rank %i\n", rank, previous);
-        MPI_Recv(&keyword, MAX_KEYWORD_LENGTH, MPI_BYTE, previous, 1, MPI_COMM_WORLD, &status);
+        MPI_Recv(keyword, MAX_KEYWORD_LENGTH, MPI_CHAR, previous, 1, MPI_COMM_WORLD, &status);
         MPI_Recv(&keywordCount, 1, MPI_INT, previous, 2, MPI_COMM_WORLD, &status);
         MPI_Recv(&lineNumbers, 100, MPI_INT, previous, 3, MPI_COMM_WORLD, &status);
         receivedKeywords++;
 
         // Print the stuff
         if (keywordCount) {
-          printf("%s: ", keyword);
+          printf("cake -- %s: ", keyword);
           i = 0;
           while (keywordCount) {
             printf("%i, ", lineNumbers[i]);
@@ -260,6 +260,7 @@ int main(int argc, char * argv[])
   if (rank == 0) {
     while (1) {
       // If the message was the last keyword, break the loop
+      printf("asdf - %d - %d", receivedKeywords, keywordIterator);
       if (receivedKeywords == keywordIterator + 1) {
         break;
       }
@@ -267,7 +268,7 @@ int main(int argc, char * argv[])
       while (!flag) {
         MPI_Iprobe(previous, 1, MPI_COMM_WORLD, &flag, &status);
       }
-      MPI_Recv(&keyword, MAX_KEYWORD_LENGTH, MPI_BYTE, previous, 1, MPI_COMM_WORLD, &status);
+      MPI_Recv(keyword, MAX_KEYWORD_LENGTH, MPI_CHAR, previous, 1, MPI_COMM_WORLD, &status);
       MPI_Recv(&keywordCount, 1, MPI_INT, previous, 2, MPI_COMM_WORLD, &status);
       MPI_Recv(&lineNumbers, 100, MPI_INT, previous, 3, MPI_COMM_WORLD, &status);
       receivedKeywords++;
