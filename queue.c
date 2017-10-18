@@ -8,7 +8,7 @@
 
 #define MAX_KEYWORD_LENGTH 10
 #define MAX_LINE_LENGTH 2001
-#define BATCH_SIZE 4
+#define BATCH_SIZE 10
 
 #define WIKI_FILE "/test10-%s.txt"
 #define KEYWORD_FILE "/keywords.txt"
@@ -27,7 +27,7 @@ void read_in_wiki();
 
 int main(int argc, char * argv[])
 {
-  int nwords, maxwords = 50000;
+  int nwords, maxwords = 500;
   int nlines, maxlines = 1000000;
   struct Node** hithead;
   struct Node** hittail;
@@ -147,8 +147,9 @@ int main(int argc, char * argv[])
     MPI_Bcast(linemem, nlines * MAX_LINE_LENGTH, MPI_CHAR, 0, MPI_COMM_WORLD);
 
 
+  // Do work...
 
-  // Do work
+  // Workers
   if(rank) {
     MPI_Status stat;
     int someval = 1;
@@ -157,14 +158,44 @@ int main(int argc, char * argv[])
       MPI_Sendrecv(&someval, 1, MPI_INT, 0, 1, wordmem, BATCH_SIZE * MAX_KEYWORD_LENGTH, MPI_CHAR, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &stat);
 
       if(*wordmem == 0) {
-	printf("Broke on final batch.\n");
+	printf("Rank %d:  No more batches available.\n", rank);
 	break;
       }
-      for(k = 0; k < BATCH_SIZE; k++) {
-        printf("Rank %d: %s\n", rank, wordmem + MAX_KEYWORD_LENGTH * k);
+      for(i = 0; i < nlines; i++) {
+        for(k = 0; k < BATCH_SIZE; k++) {
+	  if( strstr( line[i], word[k] ) != NULL ) {
+	    hittail[k] = add(hittail[k], i);
+	  }
+        }
       }
+
+      // Send back results here
+      
+      for(i = 0; i < BATCH_SIZE; i++) {
+        int *line_numbers;
+	int len;
+
+        printf("%s: ", word[i]);
+
+	// this function mallocs for line_numbers...
+	toArray(hithead[i], &line_numbers, &len);
+
+        for (k = 0; k < len - 1; k++) {
+	  printf("%d, ", line_numbers[k]);
+	}
+
+	printf("%d\n", line_numbers[len-1]);
+
+	// ...so we must free it
+	free(line_numbers); line_numbers = NULL;
+      }
+
+      // Reset linked list for next batch
     }
-  } else {
+  } 
+  
+  // Rank 0
+  else {
     MPI_Status stat;
     int someval = 1;
     int batches = nwords / BATCH_SIZE;
@@ -199,4 +230,6 @@ int main(int argc, char * argv[])
     free(hittail); hittail = NULL;
   }
 
+  MPI_Finalize();
+  return 0;
 }
