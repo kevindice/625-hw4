@@ -142,27 +142,33 @@ int main(int argc, char * argv[])
     printf( "Read in %d lines averaging %.0lf chars/line\n", nlines, nchars / nlines);
   }
 
-  // Broadcast data
-    MPI_Bcast(&nwords, 1, MPI_INT, 0, MPI_COMM_WORLD);
-    MPI_Bcast(&nlines, 1, MPI_INT, 0, MPI_COMM_WORLD);
-    MPI_Bcast(wordmem, nwords * MAX_KEYWORD_LENGTH, MPI_CHAR, 0, MPI_COMM_WORLD);
-    MPI_Bcast(linemem, nlines * MAX_LINE_LENGTH, MPI_CHAR, 0, MPI_COMM_WORLD);
-
-  if(rank == 0)
+  // Deal out keywords
+  if(!rank)
   {
-    printf("Read in and MPI comm overhead for %d lines and %d procs = %lf seconds\n", nlines, numtasks, myclock() - tlast);
-    printf("OHEAD\t%d\t%d\t%lf\t%s\t%s", nlines, numtasks, myclock() -tlast, argv[3], argv[5]);
-    printf("\n******  Starting work  ******\n\n");
+    MPI_Status stat;
+    int i;
+    int batches = nwords / 100;
+    for(i = 0; i < batches; i += 1)
+    {
+      MPI_Recv();
+      MPI_Send();
+    }
   }
-  tlast = myclock();
 
-  // Division of work
-    start = rank * (nwords/numtasks);
-    end = (rank + 1) * (nwords/numtasks);
-    if(rank == numtasks - 1) end = nwords;
+  if(rank)
+  {
+    MPI_Sendrecv();
+  }
 
-    printf("------- Proc: %d, Start: %d, End: %d, Nwords: %d, Num tasks: %d --------\n", rank, start, end, nwords, numtasks);
 
+  //int i = 0;
+  //int word_indices[n];
+  //while(i < nwords * (n - 1))
+  //{
+  //    MPI_Recieveall(&rank);
+  //    MPI_Send(rank, &(keywords[word_indicies[n]]));
+  //    word_indicies[n]++;
+  //}
 
   // Loop over the word list
   for( k = 0; k < nlines; k++ ) {
