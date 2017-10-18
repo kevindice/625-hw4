@@ -57,11 +57,12 @@ int main(int argc, char * argv[])
     allocateNodePools();
 
     // Allocate arrays for the heads and tails of the lists
-    hithead = (struct Node**) malloc( maxwords * sizeof(struct Node *) );
-    hittail = (struct Node**) malloc( maxwords * sizeof(struct Node *) );
-    for( i = 0; i < maxwords; i++ ) {
+    hithead = (struct Node**) malloc( BATCH_SIZE * sizeof(struct Node *) );
+    hittail = (struct Node**) malloc( BATCH_SIZE * sizeof(struct Node *) );
+    for( i = 0; i < BATCH_SIZE; i++ ) {
       hithead[i] = hittail[i] = node_alloc();
     }
+
   }
 
   // Set memory footprint for words depending on worker or master
@@ -190,7 +191,10 @@ int main(int argc, char * argv[])
 	free(line_numbers); line_numbers = NULL;
       }
 
-      // Reset linked list for next batch
+      // Reset linked list for next batch, ignore previous garbage.
+      for(i = 0; i < BATCH_SIZE; i++) {
+        hithead[i] = hittail[i] = node_alloc();
+      }
     }
   } 
   
