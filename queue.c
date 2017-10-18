@@ -8,6 +8,7 @@
 
 #define MAX_KEYWORD_LENGTH 10
 #define MAX_LINE_LENGTH 2001
+#define BATCH_SIZE 100
 
 #define WIKI_FILE "/test10-%s.txt"
 #define KEYWORD_FILE "/keywords.txt"
@@ -21,20 +22,19 @@ int compare(const void* a, const void* b) {
   return strcmp(*ia, *ib);
 }
 
+void read_in_words();
+void read_in_wiki();
+
 int main(int argc, char * argv[])
 {
   int nwords, maxwords = 50000;
   int nlines, maxlines = 1000000;
-  int i, k, n, err, *count;
-  double nchars = 0;
-  int start, end;
-  double tstart, ttotal, tlast;
-  FILE *fd;
-  char *wordmem, **word, *linemem, **line, *tempwordmem;
   struct Node** hithead;
   struct Node** hittail;
+  char *wordmem, **word, *linemem, **line, *tempwordmem;
 
-  // MPI related
+  int i;
+
   int numtasks, rank, len, rc;
   char hostname[MPI_MAX_PROCESSOR_NAME];
 
@@ -45,37 +45,40 @@ int main(int argc, char * argv[])
   printf("Number of tasks= %d, My rank= %d, Running on %s\n", numtasks, rank, hostname);
 
   if(argc != 6){
-     printf("Usage: %s <job id> <input size> <parallel environment> <nslots> <nhosts>", argv[0]);
-     return -1;
+    printf("Usage: %s <job id> <input size> <parallel environment> <nslots> <nhosts>", argv[0]);
+    return -1;
   }
 
-  // Set up timing for ALL cores
-  tstart = myclock();  // Set the zero time
-  tstart = myclock();  // Start the clock
-  tlast = tstart;
+  
+  if(rank)
+  {
+    allocateNodePools();
 
-  // Malloc space for the word list and lines
+    // Allocate arrays for the heads and tails of the lists
+    hithead = (struct Node**) malloc( maxwords * sizeof(struct Node *) );
+    hittail = (struct Node**) malloc( maxwords * sizeof(struct Node *) );
+    for( i = 0; i < maxwords; i++ ) {
+      hithead[i] = hittail[i] = node_alloc();
+    }
+  }
 
-  count = (int *) calloc( maxwords, sizeof( int ) );
-
-  // Allocate node pools
-  allocateNodePools();
+  // Set memory footprint for words depending on worker or master
+  int my_num_words;
+  if(rank) {
+    my_num_words = BATCH_SIZE;
+  }
+  else {
+    my_num_words = maxwords;
+  }
 
   // Contiguous memory for words
-  wordmem = malloc(maxwords * MAX_KEYWORD_LENGTH * sizeof(char));
+  wordmem = malloc(my_num_words * MAX_KEYWORD_LENGTH * sizeof(char));
   word = (char **) malloc( maxwords * sizeof( char * ) );
-  for(i = 0; i < maxwords; i++){
+  for(i = 0; i < my_num_words; i++){
     word[i] = wordmem + i * MAX_KEYWORD_LENGTH;
   }
 
-  // Allocate arrays for the heads and tails of the lists
-  hithead = (struct Node**) malloc( maxwords * sizeof(struct Node *) );
-  hittail = (struct Node**) malloc( maxwords * sizeof(struct Node *) );
-  for( i = 0; i < maxwords; i++ ) {
-    hithead[i] = hittail[i] = node_alloc();
-  }
-
-  // Contiguous memory...yay
+  // Contiguous memory for lines
   linemem = malloc(maxlines * MAX_LINE_LENGTH * sizeof(char));
   line = (char **) malloc( maxlines * sizeof( char * ) );
   for( i = 0; i < maxlines; i++ ) {
@@ -83,192 +86,24 @@ int main(int argc, char * argv[])
   }
 
 
-  // Read in the dictionary words and sort them
-
-  if(rank == 0)
-  {
-    fd = fopen( WORKING_DIRECTORY KEYWORD_FILE, "r" );
-    if(!fd) {
-        printf("\n------------------------------------\n"
-	       "\nERROR: Can't open keyword file.  Not found.\n"
-	       "\n------------------------------------\n");
-    }
-    nwords = -1;
-    do {
-      err = fscanf( fd, "%[^\n]\n", word[++nwords] );
-    } while( err != EOF && nwords < maxwords );
-    fclose( fd );
-
-    printf( "Read in %d words\n", nwords);
-
-    // sort and copy back to original contiguous memory
-    //
-    // qsort throws your pointers around and doesn't sort your
-    // strings in place.  To do this, we sort, copy over to temp memory
-    // by accessing our shuffled/sorted (depends on your perspective)
-    // pointers, memcpy back to original memory block
-
-    qsort(word, nwords, sizeof(char *), compare);
-    tempwordmem = malloc(maxwords * MAX_KEYWORD_LENGTH * sizeof(char));
-    for(i = 0; i < maxwords; i++){
-      for(k = 0; k < MAX_KEYWORD_LENGTH; k++){
-        *(tempwordmem + i * MAX_KEYWORD_LENGTH + k) = word[i][k];
-      }
-      word[i] = wordmem + i * MAX_KEYWORD_LENGTH;
-    }
-    memcpy(wordmem, tempwordmem, maxwords * MAX_KEYWORD_LENGTH);
-    free(tempwordmem); tempwordmem = NULL;
-  }
+  
 
 
-  // Read in the lines from the data file
+  // Clean up
 
-  if(rank == 0)
-  {
-    char *input_file = (char*)malloc(500 * sizeof(char));
-    sprintf(input_file, WORKING_DIRECTORY WIKI_FILE, argv[2]);
-    fd = fopen( input_file, "r" );
-    printf("\n------------------------------------\n"
-           "\nERROR: Can't open wiki file.  Not found.\n"
-           "\n------------------------------------\n");
-    nlines = -1;
-    do {
-      err = fscanf( fd, "%[^\n]\n", line[++nlines] );
-      if( line[nlines] != NULL ) nchars += (double) strlen( line[nlines] );
-    } while( err != EOF && nlines < maxlines);
-    fclose( fd );
-    free(input_file); input_file = NULL;
+  // Lines
+  free(line);    line = NULL;
+  free(linemem); linemem = NULL;
 
-    printf( "Read in %d lines averaging %.0lf chars/line\n", nlines, nchars / nlines);
-  }
-
-  // Deal out keywords
-  if(!rank)
-  {
-    MPI_Status stat;
-    int i;
-    int batches = nwords / 100;
-    for(i = 0; i < batches; i += 1)
-    {
-      MPI_Recv();
-      MPI_Send();
-    }
-  }
+  // Words
+  free(word);    word = NULL;
+  free(wordmem); wordmem = NULL;
 
   if(rank)
   {
-    MPI_Sendrecv();
+    destroyNodePools();
+    free(hithead); hithead = NULL;
+    free(hittail); hittail = NULL;
   }
 
-
-  //int i = 0;
-  //int word_indices[n];
-  //while(i < nwords * (n - 1))
-  //{
-  //    MPI_Recieveall(&rank);
-  //    MPI_Send(rank, &(keywords[word_indicies[n]]));
-  //    word_indicies[n]++;
-  //}
-
-  // Loop over the word list
-  for( k = 0; k < nlines; k++ ) {
-    for( i = start; i < end; i++ ) {
-      if( strstr( line[k], word[i] ) != NULL ) {
-        count[i]++;
-        hittail[i] = add(hittail[i], k);
-      }
-    }
-  }
-
-  printf("\n\nPART_DONE\trank %d\tafter %lf seconds\twith %s slots\ton %s hosts\twith pe %s\n",
-      rank, myclock() - tlast, argv[4], argv[5], argv[3]); fflush(stdout);
-
-  // Dump out the word counts
-
-  char *output_file = (char*) malloc(500 * sizeof(char));
-  sprintf(output_file, WORKING_DIRECTORY OUTPUT_FILE, argv[1], rank);
-
-  fd = fopen( output_file, "w" );
-    for( i = start; i < end; i++ ) {
-      if(count[i] != 0){
-        fprintf( fd, "%s: ", word[i] );
-        int *line_numbers;
-        int len;
-        // this function mallocs for line_numbers
-        toArray(hithead[i], &line_numbers, &len);
-
-            for (k = 0; k < len - 1; k++) {
-              fprintf( fd, "%d, ", line_numbers[k]);
-            }
-            fprintf( fd, "%d\n", line_numbers[len - 1]);
-
-        // so we free it
-        free(line_numbers);  line_numbers = NULL;
-      }
-    }
-  fclose( fd );
-
-  free(output_file);  output_file = NULL;
-
-  // Take end time when all are finished writing the file
-
-  printf("================\n"
-    "Rank %d --- Unrolled linked list stats:\n\n"
-    "Node Pools: %d\n"
-    "Current Node Count: %d\n"
-    "Total Nodes Allocated: %d\n"
-    "Nodes in Use: %d\n"
-    "==================\n",
-    rank,
-    _num_node_pools,
-    _current_node_count,
-    _num_node_pools * MEMORY_POOL_SIZE,
-    nodes_in_use
-  ); fflush(stdout);
-
-  MPI_Barrier(MPI_COMM_WORLD);
-
-  if(rank == 0)
-  {
-    ttotal = myclock() - tstart;
-  }
-
-
-  // Clean up after ourselves
-
-
-  // Linked list counts
-  destroyNodePools();
-  free(hithead);  hithead = NULL;
-  free(hittail);  hittail = NULL;
-
-  // Words
-  free(word);     word = NULL;
-  free(wordmem);  wordmem = NULL;
-
-  // Lines
-  free(line);     line = NULL;
-  free(linemem);  linemem = NULL;
-
-  if(rank == 0)
-  {
-    sleep(1);
-    fflush(stdout);
-    printf( "DATA\t%lf\t%d\t%d\t%s\t%s\t%s\t%s\n",
-       ttotal, nwords, nlines, argv[2], argv[3], argv[4], argv[5]);
-    fflush(stdout);
-  }
-
-  MPI_Finalize();
-  return 0;
-}
-
-double myclock() {
-  static time_t t_start = 0;  // Save and subtract off each time
-
-  struct timespec ts;
-  clock_gettime(CLOCK_REALTIME, &ts);
-  if( t_start == 0 ) t_start = ts.tv_sec;
-
-  return (double) (ts.tv_sec - t_start) + ts.tv_nsec * 1.0e-9;
 }
