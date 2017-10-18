@@ -139,9 +139,9 @@ int main(int argc, char * argv[])
         previous = (rank + numtasks - 1) % numtasks;
 
         // Calculate the set of the wiki dump for the current process to work on
-        start = rank * (nwords/numtasks);
-        end = (rank + 1) * (nwords/numtasks);
-        if(rank == numtasks - 1) end = nwords;
+        start = rank * (nlines/numtasks);
+        end = (rank + 1) * (nlines/numtasks);
+        if(rank == numtasks - 1) end = nlines;
 
         // Malloc the variable for the current keyword
         char *keyword = (char*) malloc((MAX_KEYWORD_LENGTH + 1) * sizeof(char));
