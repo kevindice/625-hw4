@@ -152,7 +152,7 @@ int main(int argc, char * argv[])
   if(rank) {
     MPI_Status stat;
     int someval = 1;
-    while(1) {
+     while(1) {
 
       MPI_Sendrecv(&someval, 1, MPI_INT, 0, 1, wordmem, BATCH_SIZE * MAX_KEYWORD_LENGTH, MPI_CHAR, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &stat);
 
@@ -167,7 +167,7 @@ int main(int argc, char * argv[])
   } else {
     MPI_Status stat;
     int someval = 1;
-    int batches = 5;
+    int batches = nwords / BATCH_SIZE;
     for(k = 0; k < batches; k++) {
       MPI_Recv(&someval, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &stat);
       MPI_Send(wordmem + (k * MAX_KEYWORD_LENGTH), BATCH_SIZE * MAX_KEYWORD_LENGTH, MPI_CHAR, stat.MPI_SOURCE, someval, MPI_COMM_WORLD);
