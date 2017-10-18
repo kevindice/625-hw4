@@ -27,7 +27,7 @@ void read_in_wiki();
 
 int main(int argc, char * argv[])
 {
-  int nwords, maxwords = 500;
+  int nwords, maxwords = 100;
   int nlines, maxlines = 1000000;
   struct Node** hithead;
   struct Node** hittail;
@@ -154,6 +154,7 @@ int main(int argc, char * argv[])
   if(rank) {
     MPI_Status stat;
     int someval = 1;
+    int my_num_batches = 0;
     int batch_number = 0;
      while(1) {
 
@@ -164,6 +165,7 @@ int main(int argc, char * argv[])
 	break;
       }
 
+      my_num_batches++;
       MPI_Recv(&batch_number, 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &stat);
 
       for(i = 0; i < nlines; i++) {
@@ -201,6 +203,8 @@ int main(int argc, char * argv[])
         hithead[i] = hittail[i] = node_alloc();
       }
     }
+
+    printf("Rank %d had %d batches!\n", rank, my_num_batches);
   } 
   
   // Rank 0
