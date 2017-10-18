@@ -154,6 +154,7 @@ int main(int argc, char * argv[])
   if(rank) {
     MPI_Status stat;
     int someval = 1;
+    int batch_number = 0;
      while(1) {
 
       MPI_Sendrecv(&someval, 1, MPI_INT, 0, 1, wordmem, BATCH_SIZE * MAX_KEYWORD_LENGTH, MPI_CHAR, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &stat);
@@ -162,6 +163,9 @@ int main(int argc, char * argv[])
 	printf("Rank %d:  No more batches available.\n", rank);
 	break;
       }
+
+      MPI_Recv(&batch_number, 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &stat);
+
       for(i = 0; i < nlines; i++) {
         for(k = 0; k < BATCH_SIZE; k++) {
 	  if( strstr( line[i], word[k] ) != NULL ) {
@@ -172,6 +176,7 @@ int main(int argc, char * argv[])
 
       // Send back results here
       
+      printf("\n\nBatch %d on Rank %d:\n", batch_number, rank);
       for(i = 0; i < BATCH_SIZE; i++) {
         int *line_numbers;
 	int len;
@@ -205,7 +210,8 @@ int main(int argc, char * argv[])
     int batches = nwords / BATCH_SIZE;
     for(k = 0; k < batches; k++) {
       MPI_Recv(&someval, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &stat);
-      MPI_Send(wordmem + (k * MAX_KEYWORD_LENGTH), BATCH_SIZE * MAX_KEYWORD_LENGTH, MPI_CHAR, stat.MPI_SOURCE, someval, MPI_COMM_WORLD);
+      MPI_Send(wordmem + (k * MAX_KEYWORD_LENGTH * BATCH_SIZE), BATCH_SIZE * MAX_KEYWORD_LENGTH, MPI_CHAR, stat.MPI_SOURCE, someval, MPI_COMM_WORLD);
+      MPI_Send(&k, 1, MPI_INT, stat.MPI_SOURCE, someval, MPI_COMM_WORLD);
     }
     *wordmem = 0;
     for(k = 0; k < numtasks - 1; k++) {
