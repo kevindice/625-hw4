@@ -4,6 +4,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <mpi.h>
+#include <math.h>
 
 #define MAX_KEYWORD_LENGTH 10
 #define MAX_LINE_LENGTH 2001
@@ -106,30 +107,45 @@ int main(int argc, char * argv[])
 
         MPI_Bcast(&nwords, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-        // Read in the lines from the data file
+        // // Read in the lines from the data file
+        // char *input_file = (char*)malloc(500 * sizeof(char));
+        // sprintf(input_file, WORKING_DIRECTORY WIKI_FILE, argv[2]);
+        // fd = fopen( input_file, "r" );
+        // if(!fd) {
+        //         printf("\n------------------------------------\n"
+        //                "\nERROR: Can't open wiki file.  Not found.\n"
+        //                "\n------------------------------------\n");
+        // }
+        // nlines = -1;
+        // do {
+        //         err = fscanf( fd, "%[^\n]\n", line[++nlines] );
+        //         if( line[nlines] != NULL ) nchars += (double) strlen( line[nlines] );
+        // } while( err != EOF && nlines < maxlines);
+        // fclose( fd );
+        // free(input_file); input_file = NULL;
+        //
+        // printf( "Read in %d lines averaging %.0lf chars/line\n", nlines, nchars / nlines);
 
-        if(rank == 0)
-        {
-                char *input_file = (char*)malloc(500 * sizeof(char));
-                sprintf(input_file, WORKING_DIRECTORY WIKI_FILE, argv[2]);
-                fd = fopen( input_file, "r" );
-                // printf("\n------------------------------------\n"
-                //        "\nERROR: Can't open wiki file.  Not found.\n"
-                //        "\n------------------------------------\n");
-                nlines = -1;
-                do {
-                        err = fscanf( fd, "%[^\n]\n", line[++nlines] );
-                        if( line[nlines] != NULL ) nchars += (double) strlen( line[nlines] );
-                } while( err != EOF && nlines < maxlines);
-                fclose( fd );
-                free(input_file); input_file = NULL;
+        nlines = pow(10,atoi(argv[2]));
 
-                printf( "Read in %d lines averaging %.0lf chars/line\n", nlines, nchars / nlines);
+        // Calculate the set of the wiki dump for the current process to work on
+        start = rank * (nlines/numtasks);
+        end = (rank + 1) * (nlines/numtasks);
+        if(rank == numtasks - 1) end = nlines;
 
-                printf("Read in and MPI comm overhead for %d lines and %d procs = %lf seconds\n", nlines, numtasks, myclock() - tlast);
-                printf("OHEAD\t%d\t%d\t%lf\t%s\t%s", nlines, numtasks, myclock() -tlast, argv[3], argv[5]);
-                printf("\n******  Starting work  ******\n\n");
+        char *input_file = (char*)malloc(500 * sizeof(char));
+        sprintf(input_file, WORKING_DIRECTORY WIKI_FILE, argv[2]);
+        fd = fopen( input_file, "r" );
+        if(!fd) {
+                printf("\n------------------------------------\n"
+                "\nERROR: Can't open wiki file.  Not found.\n"
+                "\n------------------------------------\n");
         }
+
+
+        printf("Read in and MPI comm overhead for %d lines and %d procs = %lf seconds\n", nlines, numtasks, myclock() - tlast);
+        printf("OHEAD\t%d\t%d\t%lf\t%s\t%s", nlines, numtasks, myclock() -tlast, argv[3], argv[5]);
+        printf("\n******  Starting work  ******\n\n");
 
         tlast = myclock();
 
@@ -137,11 +153,6 @@ int main(int argc, char * argv[])
         // Calculate the previous and next ranks (wrap around using modulus)
         next = (rank + 1) % numtasks;
         previous = (rank + numtasks - 1) % numtasks;
-
-        // Calculate the set of the wiki dump for the current process to work on
-        start = rank * (nlines/numtasks);
-        end = (rank + 1) * (nlines/numtasks);
-        if(rank == numtasks - 1) end = nlines;
 
         // Malloc the variable for the current keyword
         char *keyword = (char*) malloc((MAX_KEYWORD_LENGTH + 1) * sizeof(char));
@@ -180,7 +191,7 @@ int main(int argc, char * argv[])
                 //printf("[Rank %i] Searching for keyword '%s' between lines %i and %i\n", rank, keyword, start, end);
                 // Search through the set for the current rank, searching for the keyword
                 for( i = start; i < end; i++ ) {
-                        if( strstr( line[i], keyword ) != NULL ) {
+                        if((strstr( line[i], keyword ) != NULL) && keywordCount < 100 ) {
                                 // Store the line number
                                 lineNumbers[keywordCount] = i;
                                 // Increase counter
