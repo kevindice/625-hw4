@@ -157,8 +157,13 @@ int main(int argc, char * argv[])
     int batches = nwords / BATCH_SIZE;
     int my_num_batches = 0;
     int batch_number = 0;
+    
+    int *result_size = malloc(nwords * sizeof(int));
+    int *result_id = malloc(nwords * sizeof(int));
+    int **result_arr = malloc(nwords * sizeof(int *));
+    int num_results = 0;
 
-     while(1) {
+    while(1) {
 
       MPI_Sendrecv(&someval, 1, MPI_INT, 0, 1, wordmem, BATCH_SIZE * MAX_KEYWORD_LENGTH, MPI_CHAR, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &stat);
 
@@ -182,22 +187,22 @@ int main(int argc, char * argv[])
       
       printf("\n\nBatch %d on Rank %d:\n", batch_number, rank);
       for(i = 0; i < BATCH_SIZE; i++) {
-        int *line_numbers;
+        int *current_result;
 	int len;
-
+        
         printf("%s: ", word[i]);
 
 	// this function mallocs for line_numbers...
-	toArray(hithead[i], &line_numbers, &len);
+	toArray(hithead[i], &current_result, &len);
 
         for (k = 0; k < len - 1; k++) {
-	  printf("%d, ", line_numbers[k]);
+	  printf("%d, ", current_result[k]);
 	}
 
-	printf("%d\n", line_numbers[len-1]);
+	printf("%d\n", current_result[len-1]);
 
 	// ...so we must free it
-	free(line_numbers); line_numbers = NULL;
+	free(current_result); current_result = NULL;
       }
 
       // Reset linked list for next batch, ignore previous garbage.
@@ -207,6 +212,15 @@ int main(int argc, char * argv[])
     }
 
     printf("Rank %d had %d batches!\n", rank, my_num_batches);
+
+
+    for(i = 0; i < num_results; i++)
+    {
+      free(result_arr[i]);
+    }
+    free(result_id);
+    free(result_arr);
+    free(result_size);
   } 
   
   // Rank 0
