@@ -8,7 +8,7 @@
 
 #define MAX_KEYWORD_LENGTH 10
 #define MAX_LINE_LENGTH 2001
-#define BATCH_SIZE 4
+#define BATCH_SIZE 10
 
 #define WIKI_FILE "/test10-%s.txt"
 #define KEYWORD_FILE "/keywords.txt"
@@ -27,7 +27,7 @@ void read_in_wiki();
 
 int main(int argc, char * argv[])
 {
-  int nwords, maxwords = 50000;
+  int nwords, maxwords = 100;
   int nlines, maxlines = 1000000;
   struct Node** hithead;
   struct Node** hittail;
@@ -57,11 +57,12 @@ int main(int argc, char * argv[])
     allocateNodePools();
 
     // Allocate arrays for the heads and tails of the lists
-    hithead = (struct Node**) malloc( maxwords * sizeof(struct Node *) );
-    hittail = (struct Node**) malloc( maxwords * sizeof(struct Node *) );
-    for( i = 0; i < maxwords; i++ ) {
+    hithead = (struct Node**) malloc( BATCH_SIZE * sizeof(struct Node *) );
+    hittail = (struct Node**) malloc( BATCH_SIZE * sizeof(struct Node *) );
+    for( i = 0; i < BATCH_SIZE; i++ ) {
       hithead[i] = hittail[i] = node_alloc();
     }
+
   }
 
   // Set memory footprint for words depending on worker or master
@@ -147,30 +148,90 @@ int main(int argc, char * argv[])
     MPI_Bcast(linemem, nlines * MAX_LINE_LENGTH, MPI_CHAR, 0, MPI_COMM_WORLD);
 
 
+  // Do work...
 
-  // Do work
+  // Workers
   if(rank) {
     MPI_Status stat;
     int someval = 1;
+    int batches = nwords / BATCH_SIZE;
+    int my_num_batches = 0;
+    int batch_number = 0;
+    
+    int *result_size = malloc(nwords * sizeof(int));
+    int *result_id = malloc(nwords * sizeof(int));
+    int **result_arr = malloc(nwords * sizeof(int *));
+    int num_results = 0;
+
     while(1) {
 
       MPI_Sendrecv(&someval, 1, MPI_INT, 0, 1, wordmem, BATCH_SIZE * MAX_KEYWORD_LENGTH, MPI_CHAR, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &stat);
 
       if(*wordmem == 0) {
-	printf("Broke on final batch.\n");
+	printf("Rank %d:  No more batches available.\n", rank);
 	break;
       }
-      for(k = 0; k < BATCH_SIZE; k++) {
-        printf("Rank %d: %s\n", rank, wordmem + MAX_KEYWORD_LENGTH * k);
+
+      my_num_batches++;
+      MPI_Recv(&batch_number, 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &stat);
+
+      for(i = 0; i < nlines; i++) {
+        for(k = 0; k < BATCH_SIZE; k++) {
+	  if( strstr( line[i], word[k] ) != NULL ) {
+	    hittail[k] = add(hittail[k], i);
+	  }
+        }
+      }
+
+      // Send back results here
+      
+      printf("\n\nBatch %d on Rank %d:\n", batch_number, rank);
+      for(i = 0; i < BATCH_SIZE; i++) {
+        int *current_result;
+	int len;
+        
+        printf("%s: ", word[i]);
+
+	// this function mallocs for line_numbers...
+	toArray(hithead[i], &current_result, &len);
+
+        for (k = 0; k < len - 1; k++) {
+	  printf("%d, ", current_result[k]);
+	}
+
+	printf("%d\n", current_result[len-1]);
+
+	// ...so we must free it
+	free(current_result); current_result = NULL;
+      }
+
+      // Reset linked list for next batch, ignore previous garbage.
+      for(i = 0; i < BATCH_SIZE; i++) {
+        hithead[i] = hittail[i] = node_alloc();
       }
     }
-  } else {
+
+    printf("Rank %d had %d batches!\n", rank, my_num_batches);
+
+
+    for(i = 0; i < num_results; i++)
+    {
+      free(result_arr[i]);
+    }
+    free(result_id);
+    free(result_arr);
+    free(result_size);
+  } 
+  
+  // Rank 0
+  else {
     MPI_Status stat;
     int someval = 1;
-    int batches = 5;
+    int batches = nwords / BATCH_SIZE;
     for(k = 0; k < batches; k++) {
       MPI_Recv(&someval, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &stat);
-      MPI_Send(wordmem + (k * MAX_KEYWORD_LENGTH), BATCH_SIZE * MAX_KEYWORD_LENGTH, MPI_CHAR, stat.MPI_SOURCE, someval, MPI_COMM_WORLD);
+      MPI_Send(wordmem + (k * MAX_KEYWORD_LENGTH * BATCH_SIZE), BATCH_SIZE * MAX_KEYWORD_LENGTH, MPI_CHAR, stat.MPI_SOURCE, someval, MPI_COMM_WORLD);
+      MPI_Send(&k, 1, MPI_INT, stat.MPI_SOURCE, someval, MPI_COMM_WORLD);
     }
     *wordmem = 0;
     for(k = 0; k < numtasks - 1; k++) {
@@ -199,4 +260,6 @@ int main(int argc, char * argv[])
     free(hittail); hittail = NULL;
   }
 
+  MPI_Finalize();
+  return 0;
 }
