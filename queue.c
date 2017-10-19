@@ -154,8 +154,10 @@ int main(int argc, char * argv[])
   if(rank) {
     MPI_Status stat;
     int someval = 1;
+    int batches = nwords / BATCH_SIZE;
     int my_num_batches = 0;
     int batch_number = 0;
+
      while(1) {
 
       MPI_Sendrecv(&someval, 1, MPI_INT, 0, 1, wordmem, BATCH_SIZE * MAX_KEYWORD_LENGTH, MPI_CHAR, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &stat);
