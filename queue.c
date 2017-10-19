@@ -117,7 +117,7 @@ int main(int argc, char * argv[])
     memcpy(wordmem, tempwordmem, maxwords * MAX_KEYWORD_LENGTH);
     free(tempwordmem); tempwordmem = NULL;
   }
-
+  MPI_Bcast(&nwords, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
   // Read in the lines from the data file
   if(!rank)
