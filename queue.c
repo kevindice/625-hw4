@@ -164,8 +164,11 @@ int main(int argc, char * argv[])
     int num_results = 0;
 
     while(1) {
-
+      printf("\n\nPre sendrecv on rank %d\n\n", rank); fflush(stdout);
+      sleep(1);
       MPI_Sendrecv(&someval, 1, MPI_INT, 0, 1, wordmem, BATCH_SIZE * MAX_KEYWORD_LENGTH, MPI_CHAR, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &stat);
+
+      printf("Rank %d test\n", rank);
 
       if(*wordmem == 0) {
 	printf("Rank %d:  No more batches available.\n", rank);
@@ -190,20 +193,21 @@ int main(int argc, char * argv[])
         int *current_result;
 	int len;
         
-        printf("%s: ", word[i]);
+        //printf("%s: ", word[i]);
 
 	// this function mallocs for line_numbers...
 	toArray(hithead[i], &current_result, &len);
 
         for (k = 0; k < len - 1; k++) {
-	  printf("%d, ", current_result[k]);
+	  //printf("%d, ", current_result[k]);
 	}
 
-	printf("%d\n", current_result[len-1]);
+	//printf("%d\n", current_result[len-1]);
 
 	// Set result array, count, and id
 	result_arr[num_results] = current_result;
 	result_id[num_results] = batch_number * BATCH_SIZE + i;
+	printf("\tresult_id %d\n", *(result_id + num_results));
 	result_size[num_results] = len;
 	num_results++;
       }
@@ -216,6 +220,20 @@ int main(int argc, char * argv[])
 
     printf("Rank %d had %d batches!\n", rank, my_num_batches);
 
+    printf("We had %d results!\n", num_results);
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    // Send back to root
+    for(i = 0; i < num_results; i++)
+    {
+      //printf("Send from rank %d size %d for result id %d\n", rank, *(result_size + i), *(result_id + i));
+      //fflush(stdout);
+      MPI_Ssend(result_size + i, 1, MPI_INT, 0, *(result_id + i), MPI_COMM_WORLD);
+      //if(*(result_size + i)) {
+      //  MPI_Ssend(*(result_arr + i), *(result_size + i), MPI_INT, 0, *(result_id + i), MPI_COMM_WORLD);
+      //}
+    }
 
     for(i = 0; i < num_results; i++)
     {
@@ -233,13 +251,37 @@ int main(int argc, char * argv[])
     int batches = nwords / BATCH_SIZE;
     for(k = 0; k < batches; k++) {
       MPI_Recv(&someval, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &stat);
-      MPI_Send(wordmem + (k * MAX_KEYWORD_LENGTH * BATCH_SIZE), BATCH_SIZE * MAX_KEYWORD_LENGTH, MPI_CHAR, stat.MPI_SOURCE, someval, MPI_COMM_WORLD);
-      MPI_Send(&k, 1, MPI_INT, stat.MPI_SOURCE, someval, MPI_COMM_WORLD);
+      MPI_Ssend(wordmem + (k * MAX_KEYWORD_LENGTH * BATCH_SIZE), BATCH_SIZE * MAX_KEYWORD_LENGTH, MPI_CHAR, stat.MPI_SOURCE, someval, MPI_COMM_WORLD);
+      MPI_Ssend(&k, 1, MPI_INT, stat.MPI_SOURCE, someval, MPI_COMM_WORLD);
     }
     *wordmem = 0;
     for(k = 0; k < numtasks - 1; k++) {
       MPI_Recv(&someval, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &stat);
-      MPI_Send(wordmem, BATCH_SIZE * MAX_KEYWORD_LENGTH, MPI_CHAR, stat.MPI_SOURCE, someval, MPI_COMM_WORLD);
+      MPI_Ssend(wordmem, BATCH_SIZE * MAX_KEYWORD_LENGTH, MPI_CHAR, stat.MPI_SOURCE, someval, MPI_COMM_WORLD);
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    // Recieve results
+    int result_size;
+    int *current_result;
+    for(i = 0; i < nwords; i++) {
+      MPI_Recv(&result_size, 1, MPI_INT, MPI_ANY_SOURCE, i, MPI_COMM_WORLD, &stat);
+
+      printf("%s: %d\n", word[i], result_size);
+      //if(result_size) {
+      //  current_result = malloc(result_size * sizeof(int));
+      //  MPI_Recv(current_result, result_size, MPI_INT, stat.MPI_SOURCE, i, MPI_COMM_WORLD, &stat);
+
+        // Output results
+	//printf("%s: ", word[i]);
+	//for(k = 0; k < result_size - 1; k++) {
+	//  printf("%d, ", current_result[k]);
+	//}
+	//printf("%d\n", current_result[result_size - 1]);
+
+	//free(current_result);
+      //}
     }
 
     printf("Cake 123!\n");
