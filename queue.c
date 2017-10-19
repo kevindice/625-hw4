@@ -219,9 +219,9 @@ int main(int argc, char * argv[])
     for(i = 0; i < num_results; i++)
     {
       MPI_Ssend(result_size + i, 1, MPI_INT, 0, *(result_id + i), MPI_COMM_WORLD);
-      //if(*(result_size + i)) {
-      //  MPI_Ssend(*(result_arr + i), *(result_size + i), MPI_INT, 0, *(result_id + i), MPI_COMM_WORLD);
-      //}
+      if(*(result_size + i)) {
+        MPI_Ssend(*(result_arr + i), *(result_size + i), MPI_INT, 0, *(result_id + i), MPI_COMM_WORLD);
+      }
     }
 
     for(i = 0; i < num_results; i++)
@@ -258,19 +258,19 @@ int main(int argc, char * argv[])
       MPI_Recv(&result_size, 1, MPI_INT, MPI_ANY_SOURCE, i, MPI_COMM_WORLD, &stat);
 
       printf("%s: %d\n", word[i], result_size);
-      //if(result_size) {
-      //  current_result = malloc(result_size * sizeof(int));
-      //  MPI_Recv(current_result, result_size, MPI_INT, stat.MPI_SOURCE, i, MPI_COMM_WORLD, &stat);
+      if(result_size) {
+        current_result = malloc(result_size * sizeof(int));
+        MPI_Recv(current_result, result_size, MPI_INT, stat.MPI_SOURCE, i, MPI_COMM_WORLD, &stat);
 
         // Output results
-	//printf("%s: ", word[i]);
-	//for(k = 0; k < result_size - 1; k++) {
-	//  printf("%d, ", current_result[k]);
-	//}
-	//printf("%d\n", current_result[result_size - 1]);
+	printf("%s: ", word[i]);
+	for(k = 0; k < result_size - 1; k++) {
+	  printf("%d, ", current_result[k]);
+	}
+	printf("%d\n", current_result[result_size - 1]);
 
-	//free(current_result);
-      //}
+	free(current_result);
+      }
     }
 
     printf("Cake 123!\n");
