@@ -257,7 +257,6 @@ int main(int argc, char * argv[])
     for(i = 0; i < nwords; i++) {
       MPI_Recv(&result_size, 1, MPI_INT, MPI_ANY_SOURCE, i, MPI_COMM_WORLD, &stat);
 
-      printf("%s: %d\n", word[i], result_size);
       if(result_size) {
         current_result = malloc(result_size * sizeof(int));
         MPI_Recv(current_result, result_size, MPI_INT, stat.MPI_SOURCE, i, MPI_COMM_WORLD, &stat);
