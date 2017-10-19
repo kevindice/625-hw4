@@ -201,8 +201,11 @@ int main(int argc, char * argv[])
 
 	printf("%d\n", current_result[len-1]);
 
-	// ...so we must free it
-	free(current_result); current_result = NULL;
+	// Set result array, count, and id
+	result_arr[num_results] = current_result;
+	result_id[num_results] = batch_number * BATCH_SIZE + i;
+	result_size[num_results] = len;
+	num_results++;
       }
 
       // Reset linked list for next batch, ignore previous garbage.
@@ -216,7 +219,7 @@ int main(int argc, char * argv[])
 
     for(i = 0; i < num_results; i++)
     {
-      free(result_arr[i]);
+      free(*(result_arr + i));
     }
     free(result_id);
     free(result_arr);
