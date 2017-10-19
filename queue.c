@@ -165,7 +165,6 @@ int main(int argc, char * argv[])
 
     while(1) {
       printf("\n\nPre sendrecv on rank %d\n\n", rank); fflush(stdout);
-      sleep(1);
       MPI_Sendrecv(&someval, 1, MPI_INT, 0, 1, wordmem, BATCH_SIZE * MAX_KEYWORD_LENGTH, MPI_CHAR, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &stat);
 
       printf("Rank %d test\n", rank);
@@ -193,16 +192,8 @@ int main(int argc, char * argv[])
         int *current_result;
 	int len;
         
-        //printf("%s: ", word[i]);
-
 	// this function mallocs for line_numbers...
 	toArray(hithead[i], &current_result, &len);
-
-        for (k = 0; k < len - 1; k++) {
-	  //printf("%d, ", current_result[k]);
-	}
-
-	//printf("%d\n", current_result[len-1]);
 
 	// Set result array, count, and id
 	result_arr[num_results] = current_result;
@@ -227,8 +218,6 @@ int main(int argc, char * argv[])
     // Send back to root
     for(i = 0; i < num_results; i++)
     {
-      //printf("Send from rank %d size %d for result id %d\n", rank, *(result_size + i), *(result_id + i));
-      //fflush(stdout);
       MPI_Ssend(result_size + i, 1, MPI_INT, 0, *(result_id + i), MPI_COMM_WORLD);
       //if(*(result_size + i)) {
       //  MPI_Ssend(*(result_arr + i), *(result_size + i), MPI_INT, 0, *(result_id + i), MPI_COMM_WORLD);
