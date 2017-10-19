@@ -8,7 +8,7 @@
 
 #define MAX_KEYWORD_LENGTH 10
 #define MAX_LINE_LENGTH 2001
-#define BATCH_SIZE 10
+#define BATCH_SIZE 100
 
 #define WIKI_FILE "/test10-%s.txt"
 #define KEYWORD_FILE "/keywords.txt"
@@ -27,7 +27,7 @@ void read_in_wiki();
 
 int main(int argc, char * argv[])
 {
-  int nwords, maxwords = 100;
+  int nwords, maxwords = 50000;
   int nlines, maxlines = 1000000;
   struct Node** hithead;
   struct Node** hittail;
@@ -167,7 +167,6 @@ int main(int argc, char * argv[])
       MPI_Sendrecv(&someval, 1, MPI_INT, 0, 1, wordmem, BATCH_SIZE * MAX_KEYWORD_LENGTH, MPI_CHAR, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &stat);
 
       if(*wordmem == 0) {
-	printf("Rank %d:  No more batches available.\n", rank);
 	break;
       }
 
@@ -184,7 +183,7 @@ int main(int argc, char * argv[])
 
       // Send back results here
       
-      printf("Batch %d on Rank %d:\n", batch_number, rank);
+      printf("-- Batch %d on Rank %d --\n", batch_number, rank);
       for(i = 0; i < BATCH_SIZE; i++) {
         int *current_result;
 	int len;
@@ -205,11 +204,9 @@ int main(int argc, char * argv[])
       }
     }
 
-    printf("Rank %d had %d batches!\n", rank, my_num_batches);
-
-    printf("We had %d results!\n", num_results);
-
     MPI_Barrier(MPI_COMM_WORLD);
+    
+    printf("Rank %d had %d batches\n", rank, my_num_batches);
 
     // Send back to root
     for(i = 0; i < num_results; i++)
