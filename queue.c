@@ -12,7 +12,7 @@
 
 #define WIKI_FILE "/test10-%s.txt"
 #define KEYWORD_FILE "/keywords.txt"
-#define OUTPUT_FILE "/output/wiki-%s-part-%03d.out"
+#define OUTPUT_FILE "/output/wiki-%s.out"
 
 double myclock();
 
@@ -247,6 +247,9 @@ int main(int argc, char * argv[])
     // Recieve results
     int result_size;
     int *current_result;
+    char *output_file = (char*) malloc(500 * sizeof(char));
+    sprintf(output_file, WORKING_DIRECTORY OUTPUT_FILE, argv[1]);
+    fd = fopen( output_file, "w" );
     for(i = 0; i < nwords; i++) {
       MPI_Recv(&result_size, 1, MPI_INT, MPI_ANY_SOURCE, i, MPI_COMM_WORLD, &stat);
 
@@ -255,15 +258,18 @@ int main(int argc, char * argv[])
         MPI_Recv(current_result, result_size, MPI_INT, stat.MPI_SOURCE, i, MPI_COMM_WORLD, &stat);
 
         // Output results
-	printf("%s: ", word[i]);
+	fprintf(fd, "%s: ", word[i]);
 	for(k = 0; k < result_size - 1; k++) {
-	  printf("%d, ", current_result[k]);
+	  fprintf(fd, "%d, ", current_result[k]);
 	}
-	printf("%d\n", current_result[result_size - 1]);
+	fprintf(fd, "%d\n", current_result[result_size - 1]);
 
 	free(current_result);
       }
     }
+    fclose(fd);
+
+    free(output_file); output_file = NULL;
 
     printf("Cake 123!\n");
   }
