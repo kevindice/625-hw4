@@ -164,10 +164,7 @@ int main(int argc, char * argv[])
     int num_results = 0;
 
     while(1) {
-      printf("\n\nPre sendrecv on rank %d\n\n", rank); fflush(stdout);
       MPI_Sendrecv(&someval, 1, MPI_INT, 0, 1, wordmem, BATCH_SIZE * MAX_KEYWORD_LENGTH, MPI_CHAR, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &stat);
-
-      printf("Rank %d test\n", rank);
 
       if(*wordmem == 0) {
 	printf("Rank %d:  No more batches available.\n", rank);
@@ -187,7 +184,7 @@ int main(int argc, char * argv[])
 
       // Send back results here
       
-      printf("\n\nBatch %d on Rank %d:\n", batch_number, rank);
+      printf("Batch %d on Rank %d:\n", batch_number, rank);
       for(i = 0; i < BATCH_SIZE; i++) {
         int *current_result;
 	int len;
@@ -198,7 +195,6 @@ int main(int argc, char * argv[])
 	// Set result array, count, and id
 	result_arr[num_results] = current_result;
 	result_id[num_results] = batch_number * BATCH_SIZE + i;
-	printf("\tresult_id %d\n", *(result_id + num_results));
 	result_size[num_results] = len;
 	num_results++;
       }
