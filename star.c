@@ -23,7 +23,7 @@ int compare(const void* a, const void* b) {
 
 int main(int argc, char * argv[])
 {
-        int nwords, maxwords = 5000; //add again
+        int nwords, maxwords = 50000; //add again
         int nlines, maxlines = 1000000;
         int i, j, k, n, err, *count;
         double nchars = 0;
@@ -124,8 +124,8 @@ int main(int argc, char * argv[])
 
         // Read in the lines from the data file
 
-        if(rank == 0)
-        {
+        //if(rank == 0)
+        //{
                 char *input_file = (char*)malloc(500 * sizeof(char));
                 sprintf(input_file, WORKING_DIRECTORY WIKI_FILE, argv[2]);
                 fd = fopen( input_file, "r" );
@@ -141,10 +141,10 @@ int main(int argc, char * argv[])
                 free(input_file); input_file = NULL;
 
                 printf( "Read in %d lines averaging %.0lf chars/line\n", nlines, nchars / nlines);
-        }
+        //}
 //start
         //printf("test1\n");
-        MPI_Bcast(&nlines, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        //MPI_Bcast(&nlines, 1, MPI_INT, 0, MPI_COMM_WORLD);
         //printf("test2\n");
 //Division of work
         if(rank != 0) {
@@ -155,44 +155,54 @@ int main(int argc, char * argv[])
         //printf("Rank: %i, Start: %i, End: %i\n", rank, start, end);
 
         MPI_Status status;
-        int lineNumbers[nwords][100];
-        int keywordCount[nwords];
+        //int lineNumbers[nwords][1];
+        //int **lineNumbers = malloc(nwords * sizeof *lineNumbers + (nwords * (100 * sizeof(int))));
+        int **lineNumbers;
+        lineNumbers = malloc( nwords * sizeof( int * ) );
+        for(i = 0; i < nwords; i++) {
+                lineNumbers[i] = malloc(100 * (sizeof(int)));
+        }
 
-        int totalCount[nwords];
+        int *keywordCount = (int*) malloc(nwords * sizeof(int));
+
+        int *totalCount = (int*) malloc(nwords * sizeof(int));
         int receivedLineNumbers[100];
         int receivedKeywordCount = 0;
-        int hasFoundKeyword[100];
+
+        int *hasFoundKeyword = (int*) malloc(nwords * sizeof(int));
         int index = 0;
         int it = 0;
         char *keyword = (char*) malloc((MAX_KEYWORD_LENGTH +1) * sizeof(char));
         tlast = myclock();
-
+ //printf("Rank: %i entering loop\n", rank);
         while(1) {
-                //printf("[Rank %i] Loop\n", rank);
+                ////printf("[Rank %i] Loop\n", rank);
                 if(rank != 0 ) {
-                        printf("[Rank %i] asking for keyword #%i\n", rank, index);
+                        ////printf("[Rank %i] asking for keyword #%i\n", rank, index);
                         //MPI_Sendrecv(&index, 1, MPI_INT, 0, 1, keyword, MAX_KEYWORD_LENGTH, MPI_CHAR, 0, 10, MPI_COMM_WORLD, &status);
                         MPI_Send(&index, 1, MPI_INT, 0, 1, MPI_COMM_WORLD); //tag 1 is for keyword
                         MPI_Recv(keyword, MAX_KEYWORD_LENGTH, MPI_CHAR, 0, 10, MPI_COMM_WORLD, &status);
-                        printf("[Rank %i] got keyword: %s\n", rank, keyword);
+                        ////printf("[Rank %i] got keyword: %s\n", rank, keyword);
                         for(i = start; i < end; i++) {
                                 if(strstr(line[i], keyword) != NULL) {
                                         lineNumbers[index][keywordCount[index]] = i;
-                                        keywordCount[index]++;
+                                        if (keywordCount[index] < 99) {
+                                          keywordCount[index]++;
+                                        }
                                 }
-                                //printf("[Rank %i] forloop\n", rank);
+                                ////printf("[Rank %i] forloop\n", rank);
                         }
 
 
                         index++;
                         if(index == nwords) {
-                                printf("[Rank %i] Finished looking for all keywords, preparing to send to rank 0 for printing.\n", rank);
+                                //printf("[Rank %i] Finished looking for all keywords, preparing to send to rank 0 for printing.\n", rank);
                                 // All keywords shoudld be counted, time to send back data to 0 to print
                                 for (i = 0; i < nwords; i++) {
-                                        printf("[Rank %i] Sending count for keyword #%i (%i).\n", rank, i, keywordCount[i]);
-                                        printf("[Rank %i] \n", rank);
-                                        MPI_Ssend(&lineNumbers[i], 100, MPI_INT, 0, 15, MPI_COMM_WORLD);
                                         MPI_Ssend(&keywordCount[i], 1, MPI_INT, 0, 20, MPI_COMM_WORLD);
+                                        if (keywordCount[i]) {
+                                            MPI_Ssend(lineNumbers[i], keywordCount[i], MPI_INT, 0, 15, MPI_COMM_WORLD);
+                                        }
                                 }
                                 break;
                         }
@@ -201,29 +211,28 @@ int main(int argc, char * argv[])
 
 
                 if (rank== 0) {
-                        //memset(finalLineNum, 0, sizeof(int)*100);
-                        //memset(lineNumbers, 0, sizeof(int)*100);
                         MPI_Recv(&index, 1, MPI_INT, MPI_ANY_SOURCE, 1, MPI_COMM_WORLD, &status);
-                        printf("[Rank %i] request from rank %i for keyword #%i\n", rank, status.MPI_SOURCE, index);
                         MPI_Send(word[index], strlen(word[index])+1, MPI_CHAR, status.MPI_SOURCE, 10, MPI_COMM_WORLD);
-                        printf("[Rank %i] sent keyword: %s\n", rank, word[index]);
-                        //totalCount = 0;
 
                         it++;
                         if (it == nwords * (numtasks-1)) {
-                                printf("[Rank %i] Entering print loop.\n", rank);
+                                //printf("[Rank %i] Entering print loop.\n", rank);
                                 for (i = 0; i < nwords; i++) { // For each keyword
                                         for (j = 1; j < numtasks; j++) { // For each Node
-                                                MPI_Recv(receivedLineNumbers, 100, MPI_INT, j, 15, MPI_COMM_WORLD, &status); // tag 15 for line numbers
+                                                //printf("[Rank %i] Waiting for counts from rank %i.\n", rank, j);
                                                 MPI_Recv(&receivedKeywordCount, 1, MPI_INT, j, 20, MPI_COMM_WORLD, &status); // tag 20 for keywordcount
-                                                if (!hasFoundKeyword[i] && receivedKeywordCount) {
-                                                        printf("%s: ", word[i]);
-                                                        hasFoundKeyword[i] = 1;
+                                                if (receivedKeywordCount) {
+                                                        MPI_Recv(&receivedLineNumbers, 100, MPI_INT, j, 15, MPI_COMM_WORLD, &status); // tag 15 for line numbers
+                                                        //printf("[Rank %i] Received from rank %i keywordcount of %i.\n",rank, j, receivedKeywordCount);
+                                                        if (!hasFoundKeyword[i]) {
+                                                                //printf("[Rank %i] Found Keyword... Printing\n", rank);
+                                                                printf("\b\b \n%s: ", word[i]);
+                                                                hasFoundKeyword[i] = 1;
+                                                        }
+                                                        for (k = 0; k < receivedKeywordCount; k++) {
+                                                                printf("%i, ", receivedLineNumbers[k]);
+                                                        }
                                                 }
-                                                for (k = 0; k < receivedKeywordCount; k++) {
-                                                        printf("%i, ",receivedLineNumbers[k]);
-                                                }
-                                                // Print the backspace things
                                         }
                                 }
 
@@ -233,82 +242,6 @@ int main(int argc, char * argv[])
 
         }
 
-
-        //printf("IT WORKED!");
-        /*MPI_Bcast(&nwords, 1, MPI_INT, 0, MPI_COMM_WORLD);
-           MPI_Bcast(&nlines, 1, MPI_INT, 0, MPI_COMM_WORLD);
-           MPI_Bcast(wordmem, nwords * MAX_KEYWORD_LENGTH, MPI_CHAR, 0, MPI_COMM_WORLD);
-           MPI_Bcast(linemem, nlines * MAX_LINE_LENGTH, MPI_CHAR, 0, MPI_COMM_WORLD);
-
-           if(rank == 0)
-           {
-           printf("Read in and MPI comm overhead for %d lines and %d procs = %lf seconds\n", nlines, numtasks, myclock() - tlast);
-           printf("OHEAD\t%d\t%d\t%lf\t%s\t%s", nlines, numtasks, myclock() -tlast, argv[3], argv[5]);
-           printf("\n******  Starting work  ******\n\n");
-           }
-
-
-           //
-
-           printf("------- Proc: %d, Start: %d, End: %d, Nwords: %d, Num tasks: %d --------\n", rank, start, end, nwords, numtasks);
-
-
-           // Loop over the word list
-           for( k = 0; k < nlines; k++ ) {
-           for( i = start; i < end; i++ ) {
-           if( strstr( line[k], word[i] ) != NULL ) {
-            count[i]++;
-            hittail[i] = add(hittail[i], k);
-           }
-           }
-           }
-
-           printf("\n\nPART_DONE\trank %d\tafter %lf seconds\twith %s slots\ton %s hosts\twith pe %s\n",
-           rank, myclock() - tlast, argv[4], argv[5], argv[3]); fflush(stdout);
-
-           // Dump out the word counts
-         */
-        /*char *output_file = (char*) malloc(500 * sizeof(char));
-           sprintf(output_file, WORKING_DIRECTORY OUTPUT_FILE, argv[1], rank);
-
-           fd = fopen( output_file, "w" );
-           for( i = start; i < end; i++ ) {
-                if(count[i] != 0) {
-                        fprintf( fd, "%s: ", word[i] );
-                        int *line_numbers;
-                        int len;
-                        // this function mallocs for line_numbers
-                        toArray(hithead[i], &line_numbers, &len);
-
-                        for (k = 0; k < len - 1; k++) {
-                                fprintf( fd, "%d, ", line_numbers[k]);
-                        }
-                        fprintf( fd, "%d\n", line_numbers[len - 1]);
-
-                        // so we free it
-                        free(line_numbers);  line_numbers = NULL;
-                }
-           }
-           fclose( fd );
-
-           free(output_file);  output_file = NULL;
-
-           // Take end time when all are finished writing the file
-
-           printf("================\n"
-               "Rank %d --- Unrolled linked list stats:\n\n"
-               "Node Pools: %d\n"
-               "Current Node Count: %d\n"
-               "Total Nodes Allocated: %d\n"
-               "Nodes in Use: %d\n"
-               "==================\n",
-               rank,
-               _num_node_pools,
-               _current_node_count,
-               _num_node_pools * MEMORY_POOL_SIZE,
-               nodes_in_use
-               ); fflush(stdout);
-         */
         MPI_Barrier(MPI_COMM_WORLD);
 
         if(rank == 0)
@@ -318,12 +251,6 @@ int main(int argc, char * argv[])
 
         // Clean up after ourselves
 
-/*
-        // Linked list counts
-        destroyNodePools();
-        free(hithead);  hithead = NULL;
-        free(hittail);  hittail = NULL;
- */
         // Words
         free(word);     word = NULL;
         free(wordmem);  wordmem = NULL;
@@ -331,6 +258,14 @@ int main(int argc, char * argv[])
         // Lines
         free(line);     line = NULL;
         free(linemem);  linemem = NULL;
+
+        // free(keywordCount); keywordCount = NULL;
+        // free(totalCount); totalCount = NULL;
+        // free(receivedLineNumbers); receivedLineNumbers = NULL;
+        // free(receivedKeywordCount); receivedKeywordCount = NULL;
+        // free(lineNumbers); lineNumbers = NULL;
+
+
 
         if(rank == 0)
         {
